@@ -24,9 +24,23 @@ html, body {
     fill: white;
 }
 
+.hover-point {
+    cursor: pointer;
+    fill: rgb(230, 170, 0);
+    transition-duration: 200ms;
+}
+
 .bezier-curve {
     stroke: white;
     stroke-width: 2px;
+    /* cursor: pointer; */
+}
+
+.invisible-bezier-curve {
+    stroke: red;
+    stroke-opacity: 0.0;
+    stroke-width: 16px;
+    cursor: pointer;
 }
 
 .dashed-bezier {

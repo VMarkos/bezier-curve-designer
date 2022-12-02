@@ -4,12 +4,16 @@ const eventListeners = {
     document: {},
 };
 
-let startPoint, endPoint;
+let startPoint = [250, 500], endPoint = [750, 500];
 
 const controls = [];
 
 const R = 12;
 const r = 8;
+
+let step = 0.01;
+
+let curvePoints = [];
 
 function getSVGPointer(event) {
     const svg = document.getElementById("svg-container");
@@ -29,22 +33,29 @@ function movePoint(event, edge) {
 }
 
 function drawBezierLine() { // You need to generalize for n-th ordre Bezier curves.
+    if (curvePoints.length > 0) {
+        curvePoints = [];
+        if (document.getElementById("hover-point")) {
+            document.getElementById("hover-point").remove();
+        }
+    }
     let points = "";
     const polyline = document.getElementById("bezier-curve");
+    const invPoly = document.getElementById("invisible-curve");
     updateEdges();
-    // console.log(startPoint, endPoint);
     points += startPoint.join(",") + " ";
-    const step = 0.01;
-    // const bLength = getBLengthEst();
-    // const dl = R * bLength / 1000;
-    // console.log("dl:", dl);
+    step = Math.min(0.01, 10 / getBLengthEst());
+    console.log(step);
     for (let t = 0; t < 1; t += step) {
         points += bezier(t).join(",") + " ";
     }
     points += endPoint.join(",");
     polyline.setAttribute("points", points);
+    invPoly.setAttribute("points", points);
+    moveToTop(document.getElementById("invisible-curve"));
     moveToTop(document.getElementById("edge-start"));
     moveToTop(document.getElementById("edge-end"));
+    console.log(points);
 }
 
 function moveToTop(e) { // FIXME This is reaaaaly bad;
@@ -209,7 +220,7 @@ function addControl(event) {
     controls.push(newIndex);
     svg.append(newControl);
     drawBezierLine();
-    // console.log(newControl);
+    console.log(newControl);
 }
 
 function deleteControl(event) {
@@ -230,6 +241,96 @@ function deleteControl(event) {
     // console.log("after:", controls);
     drawBezierLine();
     event.target.remove();
+}
+
+function addHoverPoint(event) {
+    const svg = document.getElementById("svg-container");
+    let hoverPoint;
+    if (document.getElementById("hover-point")) {
+        // console.log("old");
+        hoverPoint = document.getElementById("hover-point");
+    } else {
+        // console.log("new");
+        hoverPoint = document.createElementNS(XMLNS, "circle");
+        hoverPoint.id = "hover-point";
+        hoverPoint.setAttribute("r", r);
+        hoverPoint.classList.add("hover-point");
+    }
+    const cursorPoint = getSVGPointer(event);
+    if (curvePoints.length === 0) {
+        curvePoints = getBezierPoints();
+    }
+    const proxima = findProxima(curvePoints, [cursorPoint.x, cursorPoint.y]);
+    const point = projectOn([cursorPoint.x, cursorPoint.y], ...proxima);
+    hoverPoint.setAttribute("cx", point[0]); // FIXME Take care of overlapping points at this point!
+    hoverPoint.setAttribute("cy", point[1]);
+    // hoverPoint.addEventListener("mouseout", removeBezierHover, false);
+    // console.log(hoverPoint, point);
+    svg.insertBefore(hoverPoint, document.getElementById("invisible-curve"));
+    // moveToTop(document.getElementById("invisible-curve"));
+    // console.log(svg.children);
+}
+
+function bezierHover(event) {
+    addHoverPoint(event);
+    // console.log("here");
+    // document.getElementById("bezier-curve").removeEventListener("mouseover", bezierHover, false);
+}
+
+function ip(x, y) {
+    return x[0] * y[0] + x[1] * y[1];
+}
+
+function projectOn(x, a, b) { // projects x on (ab).
+    // console.log(x, a, b);
+    const ax = [x[0] - a[0], x[1] - a[1]];
+    const ab = [b[0] - a[0], b[1] - a[1]];
+    if (ab[0] === 0 && ab[1] === 0) {
+        // console.log("ab=0");
+        return a;
+    }
+    const lambda = ip(ax, ab) / ip(ab, ab);
+    return [a[0] + lambda * ab[0], a[1] + lambda * ab[1]];
+}
+
+function findProxima(curve, x) {
+    // let nearest;
+    let minDist = Infinity;
+    let mini = -1;
+    let d, point;
+    for (let i = 0; i < curve.length; i++) {
+        point = curve[i];
+        d = d2(point, x);
+        if (d < minDist) {
+            minDist = d;
+            mini = i;
+        }
+    }
+    // nearest = curve[mini];
+    // console.log(mini);
+    let dLeft = Infinity, dRight = Infinity;
+    if (mini > 0) {
+        dLeft = d2(curve[mini], curve[mini - 1]);
+    }
+    if (mini < curve.length - 1) {
+        dRight = d2(curve[mini], curve[mini + 1]);
+    }
+    if (dLeft < dRight) {
+        return [curve[mini], curve[mini - 1]];
+    }
+    return [curve[mini], curve[mini + 1]];
+}
+
+function getBezierPoints() {
+    const points = [];
+    for (let t = 0; t <= 1; t+=step) {
+        points.push(bezier(t));
+    }
+    return points;
+}
+
+function removeBezierHover() {
+    document.getElementById("hover-point").remove();
 }
 
 function main() {
@@ -268,9 +369,17 @@ function main() {
         svg.addEventListener("mousemove", eventListeners["document"]["movingPoint"], false);
     }, false);
     end.addEventListener("mouseup", () => {
+        console.log("mouseup");
         svg.removeEventListener("mousemove", eventListeners["document"]["movingPoint"], false);
     }, false);
     svg.addEventListener("click", addControl, false);
+    const bezierCurve = document.getElementById("bezier-curve");
+    const invCurve = document.getElementById("invisible-curve");
+    invCurve.addEventListener("mouseover", bezierHover, false);
+    invCurve.addEventListener("mousemove", bezierHover, false);
+    invCurve.addEventListener("mouseout", () => {
+        removeBezierHover();
+    }, false);
 }
 
 window.addEventListener("load", main, false);
