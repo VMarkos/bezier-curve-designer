@@ -8,6 +8,8 @@ let startPoint = [250, 500], endPoint = [750, 500];
 
 const controls = [];
 
+let weights = [];
+
 const R = 12;
 const r = 8;
 
@@ -45,7 +47,7 @@ function drawBezierLine() { // You need to generalize for n-th ordre Bezier curv
     updateEdges();
     points += startPoint.join(",") + " ";
     step = Math.min(0.01, 10 / getBLengthEst());
-    console.log(step);
+    // console.log(step);
     for (let t = 0; t < 1; t += step) {
         points += bezier(t).join(",") + " ";
     }
@@ -55,7 +57,7 @@ function drawBezierLine() { // You need to generalize for n-th ordre Bezier curv
     moveToTop(document.getElementById("invisible-curve"));
     moveToTop(document.getElementById("edge-start"));
     moveToTop(document.getElementById("edge-end"));
-    console.log(points);
+    // console.log(points);
 }
 
 function moveToTop(e) { // FIXME This is reaaaaly bad;
@@ -135,17 +137,17 @@ function getBLengthEst() {
     for (let i = 0; i < controls.length + 1; i++) {
         if (i === 0) {
             p = document.getElementById("c-" + controls[i]);
-            x = [parseFloat(p.getAttribute("cx")), parseFloat(p.getAttribute("cx"))];
+            x = [parseFloat(p.getAttribute("cx")), parseFloat(p.getAttribute("cy"))];
             l += d2(startPoint, x);
         } else if (i === controls.length) {
             p = document.getElementById("c-" + controls[i - 1]);
-            y = [parseFloat(p.getAttribute("cx")), parseFloat(p.getAttribute("cx"))];
+            y = [parseFloat(p.getAttribute("cx")), parseFloat(p.getAttribute("cy"))];
             l += d2(y, endPoint);
         } else {
             p = document.getElementById("c-" + controls[i - 1]);
-            x = [parseFloat(p.getAttribute("cx")), parseFloat(p.getAttribute("cx"))];
+            x = [parseFloat(p.getAttribute("cx")), parseFloat(p.getAttribute("cy"))];
             p = document.getElementById("c-" + controls[i]);
-            y = [parseFloat(p.getAttribute("cx")), parseFloat(p.getAttribute("cx"))];
+            y = [parseFloat(p.getAttribute("cx")), parseFloat(p.getAttribute("cy"))];
             l += d2(x, y);
         }
     }
@@ -220,7 +222,7 @@ function addControl(event) {
     controls.push(newIndex);
     svg.append(newControl);
     drawBezierLine();
-    console.log(newControl);
+    // console.log(newControl);
 }
 
 function deleteControl(event) {
@@ -241,6 +243,14 @@ function deleteControl(event) {
     // console.log("after:", controls);
     drawBezierLine();
     event.target.remove();
+}
+
+function computeWeights(t, n) {
+    const a = [];
+    for (let k = 0; k < n; k++) {
+        a.push(binomial(n, k) * Math.pow(t, k) * Math.pow(1 - t, n - k));
+    }
+    return a;
 }
 
 function addHoverPoint(event) {
@@ -267,6 +277,9 @@ function addHoverPoint(event) {
     // hoverPoint.addEventListener("mouseout", removeBezierHover, false);
     // console.log(hoverPoint, point);
     svg.insertBefore(hoverPoint, document.getElementById("invisible-curve"));
+    for (let i = 0; i < controls.length + 2; i++) {
+        addWeightedPoint(i);
+    }
     // moveToTop(document.getElementById("invisible-curve"));
     // console.log(svg.children);
 }
@@ -294,7 +307,6 @@ function projectOn(x, a, b) { // projects x on (ab).
 }
 
 function findProxima(curve, x) {
-    // let nearest;
     let minDist = Infinity;
     let mini = -1;
     let d, point;
@@ -306,8 +318,7 @@ function findProxima(curve, x) {
             mini = i;
         }
     }
-    // nearest = curve[mini];
-    // console.log(mini);
+    weights = computeWeights((mini + 0.5) / curve.length, controls.length + 2);
     let dLeft = Infinity, dRight = Infinity;
     if (mini > 0) {
         dLeft = d2(curve[mini], curve[mini - 1]);
@@ -329,8 +340,40 @@ function getBezierPoints() {
     return points;
 }
 
+function addWeightedPoint(i) {
+    const svg = document.getElementById("svg-container");
+    let p, c;
+    let rho = R;
+    if (i === 0) {
+        p = startPoint;
+    } else if (i === weights.length - 1) {
+        p = endPoint;
+    } else {
+        c = document.getElementById("c-" + (i - 1));
+        p = [parseFloat(c.getAttribute("cx")), parseFloat(c.getAttribute("cy"))];
+        rho = r;
+    }
+    // console.log(i, controls, weights);
+    let weightedRing;
+    if (document.getElementById("w-" + i)) {
+        weightedRing = document.getElementById("w-" + i);
+    } else {
+        weightedRing = document.createElementNS(XMLNS, "circle");
+        weightedRing.id = "w-" + i;
+        weightedRing.classList.add("weighted-point");
+        weightedRing.setAttribute("cx", p[0]);
+        weightedRing.setAttribute("cy", p[1]);
+    }
+    weightedRing.setAttribute("r", rho + 20 * weights[i]);
+    // console.log(weightedRing);
+    svg.insertBefore(weightedRing, svg.firstChild);
+}
+
 function removeBezierHover() {
     document.getElementById("hover-point").remove();
+    for (let i = 0; i < controls.length + 2; i++) {
+        document.getElementById("w-" + i).remove();
+    }
 }
 
 function main() {
@@ -369,7 +412,7 @@ function main() {
         svg.addEventListener("mousemove", eventListeners["document"]["movingPoint"], false);
     }, false);
     end.addEventListener("mouseup", () => {
-        console.log("mouseup");
+        // console.log("mouseup");
         svg.removeEventListener("mousemove", eventListeners["document"]["movingPoint"], false);
     }, false);
     svg.addEventListener("click", addControl, false);
